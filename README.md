@@ -15,4 +15,4 @@ Then, there are some Python packages need to be installed<br>
 ## Dataset Preparation
 The Dataset used in our paper can be downloaded from [https://github.com/smousavi05/STEAD](https://github.com/smousavi05/STEAD). Before running, you should donwload and  store the data file in the folder [dataset](https://github.com/czw1296924847/EQGraphNet/tree/main/dataset) like<br>
 
-![image](https://github.com/czw1296924847/MagInfoNet/blob/main/dataset_structure.png)
+![image](https://github.com/czw1296924847/EQGraphNet/blob/main/dataset_structure.png)
