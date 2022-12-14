@@ -19,5 +19,5 @@ The Dataset used in our paper can be downloaded from [https://github.com/smousav
 
 ## Program Description
 ### Training and Testing Models
-After the preparation of Dataset, you can run the programs in the foloder [run](https://github.com/czw1296924847/MagInfoNet/tree/main/run) to test the performance : <br>
+After the preparation of Dataset, you can run the programs in the foloder [run](https://github.com/czw1296924847/EQGraphNet/blob/main/run) to test the performance : <br>
 `python run_MagInfoNet.py`
