@@ -43,7 +43,7 @@ if not(osp.exists(re_ad)):
     os.makedirs(re_ad)
 
 """
-Selection of noise and earthquake signals
+Data Preparation
 """
 m_train = int(m * train_ratio)       # number of training samples
 m_test = m - m_train                     # number of testing samples
