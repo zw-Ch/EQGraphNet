@@ -171,8 +171,7 @@ def ts_un(n, k):
             else:
                 for k_one in range(1, k + 1):
                     if (k_one + i) >= n:
-                        mod = (k_one + i) % n
-                        adm[i, mod] = 1.
+                        pass
                     else:
                         adm[i, i + k_one] = 1.
     adm = (adm.T + adm) / 2
