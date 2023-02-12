@@ -75,7 +75,7 @@ test_dataset = pro.SelfData(data_test, sm_test, pos_test, trace_test)
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
-model = net.MagPre(gnn_style, adm_style, k, device).to(device)
+model = net.EQGraphNet(gnn_style, adm_style, k, device).to(device)
 criterion = torch.nn.MSELoss().to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
