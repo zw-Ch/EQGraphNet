@@ -18,9 +18,9 @@ def cal_r2_one_arr(true, pred):
     return r2
 
 
-class MagPre(nn.Module):
+class EQGraphNet(nn.Module):
     def __init__(self, gnn_style, adm_style, k, device):
-        super(MagPre, self).__init__()
+        super(EQGraphNet, self).__init__()
         self.relu = nn.ReLU()
         self.gnn_style = gnn_style
         self.adm_style = adm_style
@@ -157,15 +157,6 @@ def ts_un(n, k):
                         adm[i, i + k_one] = 1.
     adm = (adm.T + adm) / 2
     # adm = adm * 0.5
-    return adm
-
-
-def tg(m):
-    adm = np.zeros(shape=(m, m))
-    for i in range(m - 1):
-        adm[i + 1, i] = 1
-    adm[0, m - 1] = 1
-    adm = adm * 0.5
     return adm
 
 
