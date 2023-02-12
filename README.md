@@ -1,5 +1,5 @@
 # EQGraphNet
-[![DOI](https://zenodo.org/badge/578110292.svg)](https://zenodo.org/badge/latestdoi/578110292)
+[![DOI](https://zenodo.org/badge/578110292.svg)](https://zenodo.org/badge/latestdoi/578110292) <br>
 EQGraphNet is an graph deep learning model used for earthquake magnitude estimation. <br>
 The paper is available in 
 
