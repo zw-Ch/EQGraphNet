@@ -1,6 +1,6 @@
 """
 Magnitude Prediction
-Our proposed work, EQGraphNet
+Our proposed work, MagInfoNet
 """
 import torch
 import numpy as np
@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import os
 import os.path as osp
 from torch.utils.data import DataLoader
+from sklearn.preprocessing import StandardScaler
 import sys
 sys.path.append('..')
 import func.process as pro
@@ -20,13 +21,14 @@ device = "cuda:1" if torch.cuda.is_available() else "cpu"
 lr = 0.0005
 weight_decay = 0.0005
 batch_size = 64
-epochs = 100
+epochs = 600
 adm_style = "ts_un"
-gnn_style = "gcn"
-k = 1
+gnn_style = "unimp"
+k = 2
 train_ratio = 0.75
 m = 200000                           # number of samples
-sm_scale = ["ml"]                     # magnitude scale
+sm_scale = ["ml"]              # magnitude scale
+prep_style = "sta"                   # preprocess style
 save_txt = False
 save_model = False
 save_np = False
@@ -39,7 +41,7 @@ fo_ti_si = 30
 bins = 40
 jump = 8
 
-re_ad = osp.join("../result/mag_predict", "EQGraphNet")
+re_ad = osp.join("../result/mag_predict", "MagInf")
 if not(osp.exists(re_ad)):
     os.makedirs(re_ad)
 
@@ -71,12 +73,22 @@ pos_test = df_test.loc[:, ["source_longitude", "source_latitude"]].values
 trace_train = df_train['trace_name'].values.reshape(-1)
 trace_test = df_test['trace_name'].values.reshape(-1)
 
-train_dataset = pro.SelfData(data_train, sm_train, pos_train, trace_train)
-test_dataset = pro.SelfData(data_test, sm_test, pos_test, trace_test)
+ps_at_name = ["p_arrival_sample", "s_arrival_sample"]
+ps_at_train, ps_at_test = df_train.loc[:, ps_at_name].values, df_test.loc[:, ps_at_name].values
+ps_at_train, ps_at_test, prep_ps_at = pro.prep_pt(ps_at_train, ps_at_test, prep_style)
+ps_at_train, ps_at_test = torch.from_numpy(ps_at_train).float(), torch.from_numpy(ps_at_test).float()
+
+t_name = ["p_travel_sec"]
+p_t_train, p_t_test = df_train.loc[:, t_name].values, df_test.loc[:, t_name].values
+p_t_train, p_t_test, prep_p_t = pro.prep_pt(p_t_train, p_t_test, prep_style)
+p_t_train, p_t_test = torch.from_numpy(p_t_train).float(), torch.from_numpy(p_t_test).float()
+
+train_dataset = pro.SelfData(data_train, sm_train, ps_at_train, p_t_train, pos_train, trace_train)
+test_dataset = pro.SelfData(data_test, sm_test, ps_at_test, p_t_test, pos_test, trace_test)
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
-model = net.EQGraphNet(gnn_style, adm_style, k, device).to(device)
+model = net.MagInfoNet(gnn_style, adm_style, k, device).to(device)
 criterion = torch.nn.MSELoss().to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
@@ -86,11 +98,12 @@ train_pos, test_pos = [], []
 train_loss, test_loss = [], []
 for epoch in range(epochs):
     loss_train_all, loss_test_all = 0, 0
-    for item_train, (x_train, y_train, pos_train, trace_train, _) in enumerate(train_loader):
+    for item_train, (x_train, y_train, ps_at_train, p_t_train, pos_train, trace_train, _) in enumerate(train_loader):
         x_train, y_train = x_train.to(device), y_train.to(device)
+        ps_at_train, p_t_train = ps_at_train.to(device), p_t_train.to(device)
 
         optimizer.zero_grad()
-        output_train = model(x_train)
+        output_train = model(x_train, ps_at_train, p_t_train)
         loss_train = criterion(output_train, y_train)
         loss_train.backward()
         optimizer.step()
@@ -111,10 +124,11 @@ for epoch in range(epochs):
             train_trace = np.concatenate((train_trace, train_trace_one), axis=0)
             train_pos = np.concatenate((train_pos, train_pos_one), axis=0)
 
-    for item_test, (x_test, y_test, pos_test, trace_test, _) in enumerate(test_loader):
+    for item_test, (x_test, y_test, ps_at_test, p_t_test, pos_test, trace_test, _) in enumerate(test_loader):
         x_test, y_test = x_test.to(device), y_test.to(device)
+        ps_at_test, p_t_test = ps_at_test.to(device), p_t_test.to(device)
 
-        output_test = model(x_test)
+        output_test = model(x_test, ps_at_test, p_t_test)
         loss_test = criterion(output_test, y_test)
         loss_test_all = loss_test_all + loss_test.item()
 
@@ -139,7 +153,7 @@ for epoch in range(epochs):
     r2_test = net.cal_r2_one_arr(test_true, test_pred)
     train_loss.append((rmse_train ** 2))
     test_loss.append((rmse_test ** 2))
-    # if (sm_scale_name == "ml" and r2_test > 0.93) or (sm_scale_name == "md" and r2_test > 0.865):
+    # if (sm_scale_name == "ml" and r2_test > 0.895) or (sm_scale_name == "md" and r2_test > 0.825):
     #     break
     print("Epoch: {:04d}  RMSE_Train: {:.4f}  RMSE_Test: {:.4f}  R2_Train: {:.8f}  R2_Test: {:.8f}".
           format(epoch, rmse_train, rmse_test, r2_train, r2_test))
@@ -149,8 +163,8 @@ pro.save_result(re_ad, model, save_np, save_model, save_loss, sm_scale_name, nam
                 test_true, test_pred, test_trace, test_pos, test_loss)
 
 if save_txt:
-    info_txt_ad = osp.join(re_ad, "EQGraphNet_result.txt")
-    info_df_ad = osp.join(re_ad, "EQGraphNet_result.csv")
+    info_txt_ad = osp.join(re_ad, "MagInf_result.txt")
+    info_df_ad = osp.join(re_ad, "MagInf_result.csv")
     f = open(info_txt_ad, 'a')
     if osp.getsize(info_txt_ad) == 0:
         f.write("r2_test r2_train rmse_test rmse_train gnn_style adm_style k sm_scale batch_size epochs lr m_train m_test name\n")
