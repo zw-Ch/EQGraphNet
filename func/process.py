@@ -82,7 +82,7 @@ class Chunk(Dataset):
 def get_train_or_test_idx(num, num_train):
     idx_all = np.arange(num)
     idx_train = np.random.choice(num, num_train, replace=False)
-    idx_test = list(set(idx_all) - set(idx_train))
+    idx_test = np.array(list(set(idx_all) - set(idx_train)))
     return idx_train, idx_test
 
 
@@ -171,7 +171,8 @@ def ts_un(n, k):
             else:
                 for k_one in range(1, k + 1):
                     if (k_one + i) >= n:
-                        pass
+                        mod = (k_one + i) % n
+                        adm[i, mod] = 1.
                     else:
                         adm[i, i + k_one] = 1.
     adm = (adm.T + adm) / 2
@@ -221,6 +222,24 @@ def prep_inv(prep, *args):
     return inv
 
 
+def prep_pt(train, test, prep_style, be_torch=False):
+    if prep_style == "sta":
+        preprocessor = StandardScaler()
+    else:
+        raise TypeError("Unknown Type of prep_style!")
+    if train.ndim == 1:
+        train = train.reshape(-1, 1)
+    if test.ndim == 1:
+        test = test.reshape(-1, 1)
+    preprocessor.fit(train)
+    train_prep = preprocessor.transform(train)
+    test_prep = preprocessor.transform(test)
+    if be_torch:
+        train_prep = torch.from_numpy(train_prep).float()
+        test_prep = torch.from_numpy(test_prep).float()
+    return train_prep, test_prep, preprocessor
+
+
 def tran_adm_to_edge_index(adm):
     u, v = np.nonzero(adm)
     num_edges = u.shape[0]
@@ -235,9 +254,57 @@ def tran_adm_to_edge_index(adm):
 
 
 def remain_sm_scale(data, df, label, scale):
-    smt = df.source_magnitude_type.values.reshape(-1)
-    idx = np.argwhere(smt == scale).reshape(-1)
+    if isinstance(scale, list):
+        smt = df['source_magnitude_type'].isin(scale).values
+        idx = np.argwhere(smt).reshape(-1)
+        num = len(scale)
+        scale_name = ""
+        for i in range(num):
+            if i == 0:
+                scale_name = scale[i]
+            else:
+                scale_name = scale_name + "_" + scale[i]
+    else:
+        smt = df.source_magnitude_type.values.reshape(-1)
+        idx = np.argwhere(smt == scale).reshape(-1)
+        scale_name = scale
     data = data[idx, :, :]
     label = label[idx]
     df = df.iloc[idx, :]
-    return data, label, df
+    return data, label, df, scale_name
+
+
+def add_noise(data_train, data_test, sm_train, sm_test, root_no, name_no, m, thre):
+    m_train, m_test = sm_train.shape[0], sm_test.shape[0]
+    idx_train, idx_test = get_train_or_test_idx(m_train + m_test, m_train)
+    no_train = Chunk(m, True, m_train, idx_train, root_no, name_no)
+    no_test = Chunk(m, False, m_train, idx_test, root_no, name_no)
+    no_train_data, no_test_data = no_train.data, no_test.data
+    no_train_sm, no_test_sm = torch.ones(m_train).float() * thre, torch.ones(m_test).float() * thre
+
+    train_data = torch.cat((data_train, no_train_data), dim=0)
+    test_data = torch.cat((data_test, no_test_data), dim=0)
+    train_sm = torch.cat((sm_train, no_train_sm), dim=0)
+    test_sm = torch.cat((sm_test, no_test_sm), dim=0)
+    return train_data, test_data, train_sm, test_sm
+
+
+def save_result(re_ad, model, save_np, save_model, save_loss, sm_scale, name, m_train, m_test,
+                train_true, train_pred, train_trace, train_pos, train_loss,
+                test_true, test_pred, test_trace, test_pos, test_loss):
+    if save_np:
+        np.save(osp.join(re_ad, "train_true_{}_{}_{}_{}.npy".format(sm_scale, name, m_train, m_test)), train_true)
+        np.save(osp.join(re_ad, "train_pred_{}_{}_{}_{}.npy".format(sm_scale, name, m_train, m_test)), train_pred)
+        np.save(osp.join(re_ad, "train_trace_{}_{}_{}_{}.npy".format(sm_scale, name, m_train, m_test)), train_trace)
+        np.save(osp.join(re_ad, "train_pos_{}_{}_{}_{}.npy".format(sm_scale, name, m_train, m_test)), train_pos)
+        np.save(osp.join(re_ad, "test_true_{}_{}_{}_{}.npy".format(sm_scale, name, m_train, m_test)), test_true)
+        np.save(osp.join(re_ad, "test_pred_{}_{}_{}_{}.npy".format(sm_scale, name, m_train, m_test)), test_pred)
+        np.save(osp.join(re_ad, "test_trace_{}_{}_{}_{}.npy".format(sm_scale, name, m_train, m_test)), test_trace)
+        np.save(osp.join(re_ad, "test_pos_{}_{}_{}_{}.npy".format(sm_scale, name, m_train, m_test)), test_pos)
+    if save_model:
+        torch.save(model.state_dict(),
+                   osp.join(re_ad, "model_{}_{}_{}_{}.pkl".format(sm_scale, name, m_train, m_test)))
+    if save_loss:
+        np.save(osp.join(re_ad, "train_loss_{}_{}_{}_{}.npy".format(sm_scale, name, m_train, m_test)), train_loss)
+        np.save(osp.join(re_ad, "test_loss_{}_{}_{}_{}.npy".format(sm_scale, name, m_train, m_test)), test_loss)
+    return None
