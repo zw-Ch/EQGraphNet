@@ -11,6 +11,7 @@ Then, there are some Python packages need to be installed<br>
 `conda install pytorch torchvision torchaudio cudatoolkit=11.3`<br>
 `conda install pyg -c pyg`<br>
 `conda install matplotlib`<br>
+`conda install basemap`<br>
 `conda install h5py==2.10.0`<br>
 
 ## Dataset Preparation
