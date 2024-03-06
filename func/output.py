@@ -67,7 +67,7 @@ def read_npy(ad, sm_i, name, m_train, m_test):
     return pred, true, pos, trace
 
 
-# read estimated results of magnitude
+# read estimated results of operation
 def read_sm(sm_list, re_ad, name, m_train, m_test):
     m = m_train + m_test
     pos_ad = osp.join(re_ad, "pos_{}_{}.npy".format(name, m))

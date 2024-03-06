@@ -7,30 +7,6 @@ import torch.nn as nn
 import torch_geometric.nn as gnn
 
 
-class MagNet(nn.Module):
-    def __init__(self):
-        super(MagNet, self).__init__()
-        self.cnn1 = nn.Conv2d(1, 64, kernel_size=(1, 3), padding=(0, 1))
-        self.pool1 = nn.MaxPool2d(kernel_size=(1, 4))
-        self.drop = nn.Dropout(p=0.2)
-        self.cnn2 = nn.Conv2d(64, 32, kernel_size=(3, 3), padding=(0, 1))
-        self.pool2 = nn.MaxPool2d(kernel_size=(1, 4))
-        self.lstm = nn.LSTM(32, 1, batch_first=True, bidirectional=True)
-        self.linear = nn.Linear(750, 1)
-
-    def forward(self, x):
-        h = self.cnn1(x.unsqueeze(1))
-        h = self.pool1(self.drop(h))
-        h = self.cnn2(h)
-        h = self.pool2(self.drop(h))
-        h = h.squeeze(2)
-        h = h.permute(0, 2, 1)
-        h, (_, _) = self.lstm(h)
-        h = h.reshape(h.shape[0], -1)
-        h = self.linear(h)
-        return h.view(-1)
-
-
 def cal_rmse_one_arr(true, pred):
     return np.sqrt(np.mean(np.square(true - pred)))
 
@@ -69,6 +45,32 @@ def cal_EQ(true_, pred_):
     return rmse, r2, acc, pre, rec, f1
 
 
+# from https://doi.org/10.1029/2019GL085976
+class MagNet(nn.Module):
+    def __init__(self):
+        super(MagNet, self).__init__()
+        self.cnn1 = nn.Conv2d(1, 64, kernel_size=(1, 3), padding=(0, 1))
+        self.pool1 = nn.MaxPool2d(kernel_size=(1, 4))
+        self.drop = nn.Dropout(p=0.2)
+        self.cnn2 = nn.Conv2d(64, 32, kernel_size=(3, 3), padding=(0, 1))
+        self.pool2 = nn.MaxPool2d(kernel_size=(1, 4))
+        self.lstm = nn.LSTM(32, 1, batch_first=True, bidirectional=True)
+        self.linear = nn.Linear(750, 1)
+
+    def forward(self, x):
+        h = self.cnn1(x.unsqueeze(1))
+        h = self.pool1(self.drop(h))
+        h = self.cnn2(h)
+        h = self.pool2(self.drop(h))
+        h = h.squeeze(2)
+        h = h.permute(0, 2, 1)
+        h, (_, _) = self.lstm(h)
+        h = h.reshape(h.shape[0], -1)
+        h = self.linear(h)
+        return h.view(-1)
+
+
+# from https://doi.org/10.1029/2022JB024595
 class CREIME(nn.Module):
     def __init__(self):
         super(CREIME, self).__init__()
@@ -96,6 +98,7 @@ class CREIME(nn.Module):
         return put
 
 
+# from https://pubs.geoscienceworld.org/ssa/srl/article-abstract/90/2A/517/568771
 class ConvNetQuakeINGV(nn.Module):
     def __init__(self):
         super(ConvNetQuakeINGV, self).__init__()
@@ -171,35 +174,35 @@ class EQGraphNet(nn.Module):
 
     def forward(self, x):
         h_0 = h = self.cnn1(x)
-        h = run_gnn(self.gnn_style, self.gnn1, h, self.ei1, self.ew1)
-        h = h + h_0
+        h = run_gnn(self.gnn_style, self.gnn1, h.permute(0, 2, 1), self.ei1, self.ew1)
+        h = h.permute(0, 2, 1) + h_0
         h_1 = h = self.cnn2(self.pre(h))
-        h = run_gnn(self.gnn_style, self.gnn2, h, self.ei2, self.ew2)
-        h = h + h_1
+        h = run_gnn(self.gnn_style, self.gnn2, h.permute(0, 2, 1), self.ei2, self.ew2)
+        h = h.permute(0, 2, 1) + h_1
         h_2 = h = self.cnn3(self.pre(h))
-        h = run_gnn(self.gnn_style, self.gnn3, h, self.ei3, self.ew3)
-        h = h + h_2
+        h = run_gnn(self.gnn_style, self.gnn3, h.permute(0, 2, 1), self.ei3, self.ew3)
+        h = h.permute(0, 2, 1) + h_2
         h_3 = h = self.cnn4(self.pre(h))
-        h = run_gnn(self.gnn_style, self.gnn4, h, self.ei4, self.ew4)
-        h = h + h_3
+        h = run_gnn(self.gnn_style, self.gnn4, h.permute(0, 2, 1), self.ei4, self.ew4)
+        h = h.permute(0, 2, 1) + h_3
         h_4 = h = self.cnn5(self.pre(h))
-        h = run_gnn(self.gnn_style, self.gnn5, h, self.ei5, self.ew5)
-        h = h + h_4
+        h = run_gnn(self.gnn_style, self.gnn5, h.permute(0, 2, 1), self.ei5, self.ew5)
+        h = h.permute(0, 2, 1) + h_4
         h_5 = h = self.cnn6(self.pre(h))
-        h = run_gnn(self.gnn_style, self.gnn6, h, self.ei6, self.ew6)
-        h = h + h_5
+        h = run_gnn(self.gnn_style, self.gnn6, h.permute(0, 2, 1), self.ei6, self.ew6)
+        h = h.permute(0, 2, 1) + h_5
         h_6 = h = self.cnn7(self.pre(h))
-        h = run_gnn(self.gnn_style, self.gnn7, h, self.ei7, self.ew7)
-        h = h + h_6
+        h = run_gnn(self.gnn_style, self.gnn7, h.permute(0, 2, 1), self.ei7, self.ew7)
+        h = h.permute(0, 2, 1) + h_6
         h_7 = h = self.cnn8(self.pre(h))
-        h = run_gnn(self.gnn_style, self.gnn8, h, self.ei8, self.ew8)
-        h = h + h_7
+        h = run_gnn(self.gnn_style, self.gnn8, h.permute(0, 2, 1), self.ei8, self.ew8)
+        h = h.permute(0, 2, 1) + h_7
         h_8 = h = self.cnn9(self.pre(h))
-        h = run_gnn(self.gnn_style, self.gnn9, h, self.ei9, self.ew9)
-        h = h + h_8
+        h = run_gnn(self.gnn_style, self.gnn9, h.permute(0, 2, 1), self.ei9, self.ew9)
+        h = h.permute(0, 2, 1) + h_8
         h_9 = h = self.cnn10(self.pre(h))
-        h = run_gnn(self.gnn_style, self.gnn10, h, self.ei10, self.ew10)
-        h = h + h_9
+        h = run_gnn(self.gnn_style, self.gnn10, h.permute(0, 2, 1), self.ei10, self.ew10)
+        h = h.permute(0, 2, 1) + h_9
         h = self.cnn11(self.pre(h))
 
         out = h.view(h.shape[0], -1)
@@ -689,14 +692,22 @@ def get_gnn(gnn_style, in_dim, out_dim):
         return gnn.CGConv(in_dim)
     elif gnn_style == "unimp":
         return gnn.TransformerConv(in_dim, out_dim)
+    elif gnn_style == "edge":
+        layer = nn.Linear(2 * in_dim, out_dim)
+        return gnn.EdgeConv(layer)
+    elif gnn_style == "gan":
+        return gnn.GATConv(in_dim, out_dim)
+    elif gnn_style == "mf":
+        return gnn.MFConv(in_dim, out_dim)
+    elif gnn_style == "resgate":
+        return gnn.ResGatedGraphConv(in_dim, out_dim)
     else:
         raise TypeError("Unknown type of gnn_style!")
 
-
 def run_gnn(gnn_style, gnn, x, ei, ew):
-    if gnn_style in ["gcn", "cheb", "sg", "appnp"]:
-        return gnn(x.permute(0, 2, 1), ei, ew).permute(0, 2, 1)
-    elif gnn_style in ["unimp"]:
+    if gnn_style in ["gcn", "cheb", "sg", "appnp", "tag"]:
+        return gnn(x, ei, ew)
+    elif gnn_style in ["unimp", "gan"]:
         batch_size = x.shape[0]  # 批量数量
         h_all = None
         for i in range(batch_size):  # 将每个样本输入图神经网络后，将每个输出结果拼接
@@ -709,7 +720,7 @@ def run_gnn(gnn_style, gnn, x, ei, ew):
                 h_all = torch.cat((h_all, h), dim=0)
         return h_all
     else:
-        return gnn(x.permute(0, 2, 1), ei).permute(0, 2, 1)
+        return gnn(x, ei)
 
 
 def ts_un(n, k):

@@ -25,21 +25,30 @@ def sort_values(values):
 def get_noise_one_natural(x, n, snr):
     e_x = np.mean(np.square(x))
     e_n = np.mean(np.square(n))
-    if e_n < 0.1:                               # 有些噪声全为零值
+    if e_n < 0.1:                               # 有些噪声全为零值，用高斯白噪声代替
         n = np.random.normal(size=x.shape)
         e_n = np.mean(np.square(n))
     ratio = np.sqrt(e_x / e_n / snr)
-    if ratio > 10000:
-        b = 1
     n_ = n * ratio
     n_ = np.expand_dims(n_, axis=0)
     return n_
 
 
-def get_noise_natural(x, n, snr):
-    x, n = x.numpy(), n.numpy()
-    xn = copy.deepcopy(x)
-    num_sample = x.shape[0]
+def get_noise_natural(x, n, snr, path, sm_scale, train, save=False):
+    if train:
+        save_path = osp.join(path, "x_n_{}_{}_train.npy".format(sm_scale, snr))
+    else:
+        save_path = osp.join(path, "x_n_{}_{}_test.npy".format(sm_scale, snr))
+    if osp.exists(save_path):
+        x_n = np.load(save_path)
+        return torch.from_numpy(x_n).float()
+
+    if torch.is_tensor(x):
+        x = x.numpy()
+    if torch.is_tensor(n):
+        n = n.numpy()
+    x_n = copy.deepcopy(x)
+    num_sample = x_n.shape[0]
     for i in range(num_sample):
         x_one, n_one = x[i, :, :], n[i, :, :]
         x_one_1, x_one_2, x_one_3 = x_one[0, :], x_one[1, :], x_one[2, :]
@@ -49,20 +58,20 @@ def get_noise_natural(x, n, snr):
         n_one_3 = get_noise_one_natural(x_one_3, n_one_3, snr)
         n_one = np.concatenate((n_one_1, n_one_2, n_one_3), axis=0)
         n_one = np.expand_dims(n_one, axis=0)
-        x_n_one = x_one + n_one
-        xn[i, :, :] = xn[i, :, :] + x_n_one
-    xn, n = torch.from_numpy(xn).float(), torch.from_numpy(n).float()
-    return xn, n
+        x_n[i, :, :] = x_n[i, :, :] + n_one
+    if save:
+        np.save(save_path, x_n)
+    return torch.from_numpy(x_n).float()
 
 
-snr = 100
+snr = 10
 device = "cuda:1" if torch.cuda.is_available() else "cpu"
 batch_size = 64
 train_ratio = 0.75
 m = 200000
 sm_scale = "ml"
 random = False
-save_txt = False
+save_txt = True
 re_ad = "../result/mag_predict"
 save_ad = "../factor/robust_natural_result"
 if not(osp.exists(save_ad)):
@@ -79,32 +88,29 @@ name_eq = "chunk2"
 root_eq = "/home/chenziwei2021/standford_dataset/{}".format(name_eq)
 
 if not random:
-    np.random.seed(1)
-idx_train_eq, idx_test_eq = pro.get_train_or_test_idx(m, m_train)
+    np.random.seed(100)
+idx_train, idx_test = pro.get_train_or_test_idx(m, m_train)
 
-Eq_train = pro.Chunk(m, True, m_train, idx_train_eq, root_eq, name_eq)
-Eq_test = pro.Chunk(m, False, m_train, idx_test_eq, root_eq, name_eq)
+Eq_train = pro.Chunk(m, True, m_train, idx_train, root_eq, name_eq)
+Eq_test = pro.Chunk(m, False, m_train, idx_test, root_eq, name_eq)
 df_train, df_test = Eq_train.df, Eq_test.df
 x_train, x_test = Eq_train.data.float(), Eq_test.data.float()
 sm_train = torch.from_numpy(df_train["source_magnitude"].values.reshape(-1)).float()
 sm_test = torch.from_numpy(df_test["source_magnitude"].values.reshape(-1)).float()
 
 # Select samples according to Magnitude Type
-x_train, sm_train, df_train, _ = pro.remain_sm_scale(x_train, df_train, sm_train, sm_scale)
-x_test, sm_test, df_test, _ = pro.remain_sm_scale(x_test, df_test, sm_test, sm_scale)
+data_train, sm_train, df_train, _ = pro.remain_sm_scale(x_train, df_train, sm_train, sm_scale)
+data_test, sm_test, df_test, _ = pro.remain_sm_scale(x_test, df_test, sm_test, sm_scale)
 
 # get natural noise
-m_train_no, m_test_no = x_train.shape[0], x_test.shape[0]
-m_no = m_train_no + m_test_no
-idx_train_no, idx_test_no = pro.get_train_or_test_idx(m_no, m_train_no)
-No_train = pro.Chunk(m_no, True, m_train_no, idx_train_no, root_no, name_no)
-No_test = pro.Chunk(m_no, False, m_train_no, idx_test_no, root_no, name_no)
+No_train = pro.Chunk(m, True, m_train, idx_train, root_no, name_no)
+No_test = pro.Chunk(m, False, m_train, idx_test, root_no, name_no)
 n_train, n_test = No_train.data.float(), No_test.data.float()
 
-xn_train, n_train = get_noise_natural(x_train, n_train, snr)
-xn_test, n_test = get_noise_natural(x_test, n_test, snr)
+data_n_train = get_noise_natural(data_train, n_train, snr, save_ad, sm_scale, True)
+data_n_test = get_noise_natural(data_test, n_test, snr, save_ad, sm_scale, False)
 
-test_dataset = pro.SelfData(xn_test, sm_test)
+test_dataset = pro.SelfData(data_n_test, sm_test)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 criterion = torch.nn.MSELoss().to(device)
 
@@ -117,9 +123,8 @@ EQG.load_state_dict(torch.load(osp.join(re_ad, "EQGraphNet", "model_{}_{}_{}_{}.
 
 train_pred, train_true, test_pred, test_true = [], [], [], []
 train_pos, test_pos = [], []
-for item_test, (x_test, y_test, index_test) in enumerate(test_loader):
+for item_test, (x_test, y_test, _) in enumerate(test_loader):
     x_test, y_test = x_test.to(device), y_test.to(device)
-    a = x_test.detach().cpu().numpy()
 
     output_test = EQG(x_test)
     test_pred_one = output_test.detach().cpu().numpy()
@@ -133,7 +138,7 @@ for item_test, (x_test, y_test, index_test) in enumerate(test_loader):
 
 rmse_EQG = net.cal_rmse_one_arr(test_true, test_pred)
 r2_EQG = net.cal_r2_one_arr(test_true, test_pred)
-print("EQG:     RMSE_Test: {:.4f}  R2_Test: {:.4f}".format(rmse_EQG, r2_EQG))
+print("EQG: RMSE_Test: {:.4f}  R2_Test: {:.4f}".format(rmse_EQG, r2_EQG))
 
 """
 MagNet
@@ -143,7 +148,7 @@ MagNet.load_state_dict(torch.load(osp.join(re_ad, "MagNet", "model_{}_{}_{}_{}.p
                                            format(sm_scale, name_eq, m_train, m_test))))
 
 train_pred, train_true, test_pred, test_true = [], [], [], []
-for item_test, (x_test, y_test, index_test) in enumerate(test_loader):
+for item_test, (x_test, y_test, _) in enumerate(test_loader):
     x_test, y_test = x_test.to(device), y_test.to(device)
 
     output_test = MagNet(x_test)
@@ -156,9 +161,9 @@ for item_test, (x_test, y_test, index_test) in enumerate(test_loader):
         test_pred = np.concatenate((test_pred, test_pred_one), axis=0)
         test_true = np.concatenate((test_true, test_true_one), axis=0)
 
-rmse_MagNet = net.cal_rmse_one_arr(test_true, test_pred)
-r2_MagNet = net.cal_r2_one_arr(test_true, test_pred)
-print("MagNet:  RMSE_Test: {:.4f}  R2_Test: {:.4f}".format(rmse_MagNet, r2_MagNet))
+rmse_Mag = net.cal_rmse_one_arr(test_true, test_pred)
+r2_Mag = net.cal_r2_one_arr(test_true, test_pred)
+print("Mag: RMSE_Test: {:.4f}  R2_Test: {:.4f}".format(rmse_Mag, r2_Mag))
 
 """
 ConvNetQuake_INGV
@@ -168,7 +173,7 @@ COI.load_state_dict(torch.load(osp.join(re_ad, "ConvNetQuake_INGV", "model_{}_{}
                                         format(sm_scale, name_eq, m_train, m_test))))
 
 train_pred, train_true, test_pred, test_true = [], [], [], []
-for item_test, (x_test, y_test, index_test) in enumerate(test_loader):
+for item_test, (x_test, y_test, _) in enumerate(test_loader):
     x_test, y_test = x_test.to(device), y_test.to(device)
 
     output_test = COI(x_test)
@@ -183,7 +188,7 @@ for item_test, (x_test, y_test, index_test) in enumerate(test_loader):
 
 rmse_COI = net.cal_rmse_one_arr(test_true, test_pred)
 r2_COI = net.cal_r2_one_arr(test_true, test_pred)
-print("COI:     RMSE_Test: {:.4f}  R2_Test: {:.4f}".format(rmse_COI, r2_COI))
+print("COI: RMSE_Test: {:.4f}  R2_Test: {:.4f}".format(rmse_COI, r2_COI))
 
 """
 CREIME
@@ -217,8 +222,8 @@ def get_xy(data, df, sm, p_len):
 
 
 p_len = 125
-x_test, y_test = get_xy(xn_test, df_test, sm_test, p_len)
-test_dataset = pro.SelfData(x_test, y_test, sm_test)
+data_n_cre_test, _ = get_xy(data_n_test, df_test, sm_test, p_len)
+test_dataset = pro.SelfData(data_n_cre_test, sm_test)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
 CREIME = net.CREIME().to(device)
@@ -226,12 +231,12 @@ CREIME.load_state_dict(torch.load(osp.join(re_ad, "CREIME", "model_{}_{}_{}_{}.p
                                            format(sm_scale, name_eq, m_train, m_test))))
 
 train_pred, train_true, test_pred, test_true = [], [], [], []
-for item_test, (x_test, y_test, sm_test, index_test) in enumerate(test_loader):
+for item_test, (x_test, y_test, _) in enumerate(test_loader):
     x_test, y_test = x_test.to(device), y_test.to(device)
 
     output_test = CREIME(x_test)
     test_pred_one = cal_mag(output_test).detach().cpu().numpy()
-    test_true_one = sm_test.detach().cpu().numpy()
+    test_true_one = y_test.detach().cpu().numpy()
     if item_test == 0:
         test_pred = test_pred_one
         test_true = test_true_one
@@ -239,9 +244,49 @@ for item_test, (x_test, y_test, sm_test, index_test) in enumerate(test_loader):
         test_pred = np.concatenate((test_pred, test_pred_one), axis=0)
         test_true = np.concatenate((test_true, test_true_one), axis=0)
 
-rmse_CREIME = net.cal_rmse_one_arr(test_true, test_pred)
-r2_CREIME = net.cal_r2_one_arr(test_true, test_pred)
-print("CREIME:  RMSE_Test: {:.4f}  R2_Test: {:.4f}".format(rmse_CREIME, r2_CREIME))
+rmse_CRE = net.cal_rmse_one_arr(test_true, test_pred)
+r2_CRE = net.cal_r2_one_arr(test_true, test_pred)
+print("CRE: RMSE_Test: {:.4f}  R2_Test: {:.4f}".format(rmse_CRE, r2_CRE))
+
+"""
+MagInfoNet
+"""
+# Get P/S wave Arrival Time
+ps_at_name = ["p_arrival_sample", "s_arrival_sample"]
+ps_at_train, ps_at_test = df_train.loc[:, ps_at_name].values, df_test.loc[:, ps_at_name].values
+_, _, ps_at_test = pro.prep_pt("sta", ps_at_train, ps_at_test)
+ps_at_test = torch.from_numpy(ps_at_test).float()
+
+# Get P wave Travel Time
+t_name = ["p_travel_sec"]
+p_t_train, p_t_test = df_train.loc[:, t_name].values, df_test.loc[:, t_name].values
+_, _, p_t_test = pro.prep_pt("sta", p_t_train, p_t_test)
+p_t_test = torch.from_numpy(p_t_test).float()
+
+MaI = net.MagInfoNet("unimp", "ts_un", 2, device).to(device)
+MaI.load_state_dict(torch.load(osp.join(re_ad, "MagInf", "model_{}_{}_{}_{}.pkl".format(sm_scale, name_eq, m_train, m_test))))
+
+test_dataset = pro.SelfData(data_n_test, ps_at_test, p_t_test, sm_test)
+test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+
+test_pred, test_true = [], []
+for item_test, (x_test, ps_at_test, p_t_test, y_test, _) in enumerate(test_loader):
+    x_test, y_test = x_test.to(device), y_test.to(device)
+    ps_at_test, p_t_test = ps_at_test.to(device), p_t_test.to(device)
+
+    output_test = MaI(x_test, ps_at_test, p_t_test)
+    test_pred_one = output_test.detach().cpu().numpy()
+    test_true_one = y_test.detach().cpu().numpy()
+    if item_test == 0:
+        test_pred = test_pred_one
+        test_true = test_true_one
+    else:
+        test_pred = np.concatenate((test_pred, test_pred_one), axis=0)
+        test_true = np.concatenate((test_true, test_true_one), axis=0)
+
+rmse_MaI = net.cal_rmse_one_arr(test_true, test_pred)
+r2_MaI = net.cal_r2_one_arr(test_true, test_pred)
+print("MaI: RMSE_Test: {:.4f}  R2_Test: {:.4f}".format(rmse_MaI, r2_MaI))
 
 """
 save robust result
@@ -251,15 +296,17 @@ if save_txt:
     info_df_ad = osp.join(save_ad, "robust_mag_result_{}_{}_{}.csv".format(sm_scale, name_eq, m))
     f = open(info_txt_ad, 'a')
     if osp.getsize(info_txt_ad) == 0:
-        f.write("snr r2_EQG r2_MagNet r2_CREIME r2_COI rmse_EQG rmse_MagNet rmse_CREIME rmse_COI\n")
+        f.write("snr r2_MaI r2_EQG r2_Mag r2_CRE r2_COI rmse_MaI rmse_EQG rmse_Mag rmse_CRE rmse_COI\n")
     f.write(str(snr) + "  ")
+    f.write(str(round(r2_MaI, 4)) + "  ")
     f.write(str(round(r2_EQG, 4)) + "  ")
-    f.write(str(round(r2_MagNet, 4)) + "  ")
-    f.write(str(round(r2_CREIME, 4)) + "  ")
+    f.write(str(round(r2_Mag, 4)) + "  ")
+    f.write(str(round(r2_CRE, 4)) + "  ")
     f.write(str(round(r2_COI, 4)) + "  ")
+    f.write(str(round(rmse_MaI, 4)) + "  ")
     f.write(str(round(rmse_EQG, 4)) + "  ")
-    f.write(str(round(rmse_MagNet, 4)) + "  ")
-    f.write(str(round(rmse_CREIME, 4)) + "  ")
+    f.write(str(round(rmse_Mag, 4)) + "  ")
+    f.write(str(round(rmse_CRE, 4)) + "  ")
     f.write(str(round(rmse_COI, 4)) + "  ")
 
     f.write("\n")

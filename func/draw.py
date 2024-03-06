@@ -32,7 +32,6 @@ def cal_dist(x, bins, v_min=None, v_max=None):
         x = x[x <= v_max]
         x = np.append(x, v_max)
     x_label, x_bins = pd.cut(x, bins=bins, retbins=True)
-    x_label = pd.DataFrame(x_label)
     x_label_vc = pd.DataFrame(x_label).value_counts()
     interval = x_label_vc.index.tolist()
     interval_sum = x_label_vc.values
@@ -59,7 +58,7 @@ def cal_dist(x, bins, v_min=None, v_max=None):
 
 
 def dist_fast(x, bins, jump, x_name, fig_si, fo_si, fo_ti_si, t=None, y_name="Frequency"):
-    mid_all_sort, interval_sum_sort, left, right = cal_dist(x, bins)         # calculate distribution
+    mid_all_sort, interval_sum_sort, left, right = cal_dist(x, bins)         # calculate dist
     fig = plt.figure(figsize=fig_si)
     if t is not None:
         plt.title(t, fontsize=fo_si)
@@ -109,14 +108,14 @@ def r2_line(y1, y2, mag_min, mag_max):
     return line
 
 
-def result(true, pred, loc, sm, fig_si, fo_si, fo_ti_si, fo_te, la, t=None, den=False, cmax=None, mag_min=None, mag_max=None,
-           c='lightcoral'):
+def result(true, pred, loc, sm, fig_si, fo_si, fo_ti_si, fo_te, la, den=False, cmax=None, mag_min=None, mag_max=None,
+           c='lightcoral', t=None):
     line = r2_line(true, pred, mag_min, mag_max)
     line_min, line_max = np.min(line), np.max(line)
     fig = plt.figure(figsize=fig_si)
     ax = fig.add_subplot(111)
     lim_min, lim_max = line_min - 0.2, line_max + 0.2
-    _, cs = ax_result(ax, line, lim_min, lim_max, sm, true, pred, loc, fo_te, la, c, den, cmax)
+    _, cs = ax_result(ax, line, sm, true, pred, loc, fo_te, la, c, den, cmax)
 
     if la == "zh":
         plt.rcParams["font.sans-serif"] = ["SimHei"]
@@ -139,7 +138,7 @@ def result(true, pred, loc, sm, fig_si, fo_si, fo_ti_si, fo_te, la, t=None, den=
     return fig
 
 
-def ax_result(ax, line, lim_min, lim_max, sm, true, pred, loc, fo_te, la, c, den, cmax):
+def ax_result(ax, line, sm, true, pred, loc, fo_te, la, c, den, cmax):
     r2 = cal_r2_one_arr(true, pred)
     rmse = cal_rmse_one_arr(true, pred)
     if la == "zh":
@@ -178,16 +177,13 @@ def ax_result(ax, line, lim_min, lim_max, sm, true, pred, loc, fo_te, la, c, den
     ax.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f'))
     ax.legend(fontsize=fo_te - 15, loc=4)
     if loc != []:
-        lim_length = lim_max - lim_min
-        x_loc = loc[0] * lim_length + lim_min
-        y_loc = loc[1] * lim_length + lim_min
         if la == "zh":
             t_str = "R$^{2}$" + "   = {:.4f}\nRMSE = {:.4f}".format(r2, rmse)
         elif la == "en":
             t_str = "R$^{2}$" + "      = {:.4f}\nRMSE = {:.4f}".format(r2, rmse)
         else:
             raise ValueError("!")
-        t = ax.text(x_loc, y_loc, t_str, fontsize=fo_te)
+        t = ax.text(loc[0], loc[1], t_str, ha='center', va='center', fontsize=fo_te, transform=ax.transAxes)
         t.set_bbox(dict(facecolor=c, alpha=0.5, edgecolor=c))
     return ax, cs
 
@@ -207,7 +203,7 @@ def color_bar(true, pred, t, fig_si, fo_si, la, cmax=None):
     return fig
 
 
-def dist(x, bins, jump, pos, t, fig_si, fo_si, fo_ti_si, fo_te_si, la, v_min=None, v_max=None,
+def dist(x, bins, jump, pos, t, fig_si, fo_si, fo_ti_si, fo_te_si, la, x_name, y_name, v_min=None, v_max=None,
          alpha=1, c='royalblue'):
     fig = plt.figure(figsize=fig_si)
     ax = fig.add_subplot(111)
@@ -234,11 +230,8 @@ def dist(x, bins, jump, pos, t, fig_si, fo_si, fo_ti_si, fo_te_si, la, v_min=Non
     if la == "zh":
         plt.rcParams["font.sans-serif"] = ["SimHei"]
         plt.rcParams["axes.unicode_minus"] = False
-        plt.xlabel("误差", fontsize=fo_si, labelpad=30)
-        plt.ylabel("频次/千", fontsize=fo_si, labelpad=30)
-    elif la == "en":
-        plt.xlabel("Errors", fontsize=fo_si, labelpad=30)
-        plt.ylabel("Frequency/k", fontsize=fo_si, labelpad=30)
+    plt.xlabel(x_name, fontsize=fo_si, labelpad=30)
+    plt.ylabel(y_name, fontsize=fo_si, labelpad=30)
     fig.subplots_adjust(bottom=0.2, left=0.15)
     return fig
 
@@ -252,13 +245,8 @@ def ax_dist(ax, interval_sum_sort, x, bins, pos, fo_te_si, c, alpha):
     ax.xaxis.grid(c="white", linewidth=5)
     if pos != []:
         mean, std = np.mean(x), np.std(x)
-        axes = plt.gca()
-        lim_x_min, lim_x_max = axes.get_xlim()
-        lim_y_min, lim_y_max = axes.get_ylim()
-        lim_x_length, lim_y_length = lim_x_max - lim_x_min, lim_y_max - lim_y_min
-        x_loc = pos[0] * lim_x_length + lim_x_min
-        y_loc = pos[1] * lim_y_length + lim_y_min
-        t = ax.text(x_loc, y_loc, r'$\mu^{ e}$' + " = {:.4f}\n".format(mean) + r'$\sigma^{ e}$' + " = {:.4f}".format(std), fontsize=fo_te_si)
+        t = ax.text(pos[0], pos[1], r'$\mu^{ e}$' + " = {:.4f}\n".format(mean) + r'$\sigma^{ e}$' + " = {:.4f}".format(std),
+                    ha='center', va='center', transform=ax.transAxes, fontsize=fo_te_si)
         t.set_bbox(dict(facecolor='lightcoral', alpha=0.5, edgecolor='lightcoral'))
     return ax
 
@@ -301,12 +289,13 @@ def map_view(arr_list, t_list, pos, lat_min, lat_max, lon_min, lon_max, fig_si, 
     return fig
 
 
+# based on seismic parameter (snr, depth, distance...) plot estimated errors
 def error_fea(error, fea, fig_si, fo_si, fo_ti_si, cmax, x_name, mean, y_lim, la, model, vmax):
     fig = plt.figure(figsize=fig_si)
     ax = fig.add_subplot(111)
     pos = np.hstack([error.reshape(-1, 1), fea.reshape(-1, 1)])
     pos_c = gaussian_kde(pos.T)(pos.T)
-    abc = np.max(pos_c)
+    abc = np.max(pos_c)     # EQG and MaI use same 'vmax', defined in feature_effect.py
     cs = ax.scatter(fea, error, c=pos_c, s=300, alpha=0.7, cmap=plt.cm.rainbow, vmax=vmax)
     if mean:
         error_mean, fea_mean = error_fea_mean(error, fea)
@@ -369,7 +358,7 @@ def error_fea_mean(error_, fea_, bins=60):
     return error_mean, fea_mean
 
 
-def loss(l_EQG_train, l_MaI_train, l_EQG_test, l_MaI_test, sm, fig_si, fo_si, fo_ti_si, fo_l_si, la, v_lim=None):
+def loss(l_MaI_train, l_MaI_test, l_EQG_train, l_EQG_test, sm, fig_si, fo_si, fo_ti_si, fo_l_si, la, v_lim=None):
     fig, ax = plt.subplots(1, 1, figsize=fig_si)
     if la == "en":
         label_train = "Training"
@@ -386,10 +375,10 @@ def loss(l_EQG_train, l_MaI_train, l_EQG_test, l_MaI_test, sm, fig_si, fo_si, fo
     else:
         raise TypeError("Unknown type of 'la', must be 'zh' or 'en'!")
     alpha, lw = 0.9, 4
-    ax.plot(l_EQG_train, lw=lw, label="EQGraphNet" + label_train, c='purple', alpha=alpha)
-    ax.plot(l_EQG_test, lw=lw, label="EQGraphNet" + label_test, c='orchid', alpha=alpha)
     ax.plot(l_MaI_train, lw=lw, label="MagInfoNet" + label_train, c='red', alpha=alpha)
     ax.plot(l_MaI_test, lw=lw, label="MagInfoNet" + label_test, c='lightcoral', alpha=alpha)
+    ax.plot(l_EQG_train, lw=lw, label="EQGraphNet" + label_train, c='purple', alpha=alpha)
+    ax.plot(l_EQG_test, lw=lw, label="EQGraphNet" + label_test, c='orchid', alpha=alpha)
     ax.set_xlabel(x_label, fontsize=fo_si, labelpad=30)
     ax.set_ylabel(y_label, fontsize=fo_si, labelpad=30)
     ax.legend(fontsize=fo_l_si)

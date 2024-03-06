@@ -69,11 +69,11 @@ def read_snr(df, style):
     return snr_all
 
 
-# "snr_db", "source_distance_km", "source_depth_km"
-fea_name = "source_depth_km"
+# ["snr_db", "source_distance_km", "source_depth_km", "source_magnitude"]
+fea_name = "source_magnitude"
 
-# "EQGraphNet", "MagInfoNet"
-model = "EQGraphNet"
+# ["EQGraphNet", "MagInfoNet"]
+model = "MagInfoNet"
 
 fea_range = [""]
 sm_list = ["ml", "md"]
@@ -114,24 +114,31 @@ else:
     fea = df[fea_name].values.reshape(-1)
 fea = tran_fea(fea)
 
+# set x_name
 if fea_name == "source_distance_km" and la == "zh":
     x_name = "震中距（千米）"
 elif fea_name == "source_depth_km" and la == "zh":
     x_name = "震源深度（千米）"
 elif fea_name == "snr_db" and la == "zh":
     x_name = "信噪比（dB）"
+elif fea_name == "source_magnitude" and la == "zh":
+    x_name = "震级"
 elif fea_name == "source_distance_km" and la == "en":
     x_name = "Hypocentral distances (km)"
 elif fea_name == "source_depth_km" and la == "en":
     x_name = "Hypocentral depths (km)"
 elif fea_name == "snr_db" and la == "en":
     x_name = "SNR (dB)"
+elif fea_name == "source_magnitude" and la == "en":
+    x_name = "Magnitudes"
 
+# set y_name
 if la == "zh":
     y_name = "频次/千"
 elif la == "en":
     y_name = "Frequency"
 
+# set saved figure name and v_max
 if fea_name == "source_distance_km":
     fig_name = "source_distance"
     v_max = 0.061
@@ -141,6 +148,10 @@ elif fea_name == "source_depth_km":
 elif fea_name == "snr_db":
     fig_name = "snr"
     v_max = 0.121
+elif fea_name == "source_magnitude":
+    fig_name = "sm"
+    v_max = 2.16
+    fea = np.where(fea > 0, fea, 0)
 
 """
 errors on different features
@@ -153,14 +164,14 @@ else:
     raise TypeError("Unknown type of model! Must be 'EQGraphNet' or 'MagInfoNet'!")
 
 # fig_cb = draw.color_bar(np.array([1, 2]), np.array([1, 2]), "核密度", (60, 12), fo_si, la, cmax)
-fig_error_fea = draw.error_fea(error, fea, (20, 36), fo_si, fo_ti_si, cmax, x_name, True, y_lim, la, model, v_max)
-# fig_fea_dist = dist(fea, 40, 8, (20, 7), fo_si, fo_ti_si, x_name, y_name, la)
+# fig_error_fea = draw.error_fea(error, fea, (15, 36), fo_si, fo_ti_si, cmax, x_name, True, y_lim, la, model, v_max)
+fig_fea_dist = dist(fea, 40, 8, (15, 7), fo_si, fo_ti_si, x_name, y_name, la)
 
 if save_fig:
     pass
     # fig_cb.savefig(osp.join(g_ad, "cb.png"))
-    fig_error_fea.savefig(osp.join(g_ad, model, "error_fea_{}.png".format(fig_name)))
-    # fig_fea_dist.savefig(osp.join(g_ad, "dist_{}.png".format(fig_name)))
+    # fig_error_fea.savefig(osp.join(g_ad, model, "error_fea_{}.png".format(fig_name)))
+    fig_fea_dist.savefig(osp.join(g_ad, "dist_{}.png".format(fig_name)))
 
 print()
 plt.show()

@@ -30,15 +30,7 @@ def get_noise_one(x, ratio):
     return n
 
 
-def get_noise(x, snr, path, sm_scale, train):                 # calculate E(x^2)
-    if train:
-        save_path = osp.join(path, "x_n_{}_{}_train.npy".format(sm_scale, snr))
-    else:
-        save_path = osp.join(path, "x_n_{}_{}_test.npy".format(sm_scale, snr))
-    if osp.exists(save_path):
-        x_n = np.load(save_path)
-        return torch.from_numpy(x_n).float()
-
+def get_noise(x, snr):
     if torch.is_tensor(x):
         x = x.numpy()
     x_n = copy.deepcopy(x)
@@ -55,17 +47,6 @@ def get_noise(x, snr, path, sm_scale, train):                 # calculate E(x^2)
         n_one = np.expand_dims(n_one, axis=0)
         x_n[i, :, :] = x_n[i, :, :] + n_one
 
-        # plt.figure()
-        # plt.plot(x[i, 0, :], alpha=0.5, label="x")
-        # plt.plot(x_n[i, 0, :], alpha=0.5, label="x_n")
-        # plt.plot(x_n[i, 0, :] - x[i, 0, :], alpha=0.5, label="n")
-        # e = np.mean(np.square(x_n[i, 0, :])) / np.mean(np.square(n_one[0, 0, :]))
-        # snr_ = np.log10(e)
-        # plt.legend()
-        # plt.show()
-        # print()
-
-    np.save(save_path, x_n)
     return torch.from_numpy(x_n).float()
 
 
@@ -105,8 +86,8 @@ sm_test = torch.from_numpy(df_test["source_magnitude"].values.reshape(-1)).float
 data_train, sm_train, df_train, _ = pro.remain_sm_scale(data_train, df_train, sm_train, sm_scale)
 data_test, sm_test, df_test, _ = pro.remain_sm_scale(data_test, df_test, sm_test, sm_scale)
 
-data_n_train = get_noise(data_train, snr, save_ad, sm_scale, True)
-data_n_test = get_noise(data_test, snr, save_ad, sm_scale, False)
+data_n_train = get_noise(data_train, snr)
+data_n_test = get_noise(data_test, snr)
 
 test_dataset = pro.SelfData(data_n_test, sm_test)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
@@ -191,13 +172,13 @@ MagInfoNet
 # Get P/S wave Arrival Time
 ps_at_name = ["p_arrival_sample", "s_arrival_sample"]
 ps_at_train, ps_at_test = df_train.loc[:, ps_at_name].values, df_test.loc[:, ps_at_name].values
-_, ps_at_test, _ = pro.prep_pt(ps_at_train, ps_at_test, "sta")
+_, _, ps_at_test = pro.prep_pt("sta", ps_at_train, ps_at_test)
 ps_at_test = torch.from_numpy(ps_at_test).float()
 
 # Get P wave Travel Time
 t_name = ["p_travel_sec"]
 p_t_train, p_t_test = df_train.loc[:, t_name].values, df_test.loc[:, t_name].values
-_, p_t_test, _ = pro.prep_pt(p_t_train, p_t_test, "sta")
+_, _, p_t_test = pro.prep_pt("sta", p_t_train, p_t_test)
 p_t_test = torch.from_numpy(p_t_test).float()
 
 MaI = net.MagInfoNet("unimp", "ts_un", 2, device).to(device)
