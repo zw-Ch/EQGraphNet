@@ -67,6 +67,8 @@ class Chunk(Dataset):
 
             torch.save(data, data_ad)
             torch.save(index, index_ad)
+        if torch.is_tensor(index):
+            index = index.numpy()
         return data, index
 
 
